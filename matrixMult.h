@@ -1,7 +1,66 @@
 #include <cuda_runtime.h>
-#define DIM(i, j, N) i+j*N
+#define DIM(i, j, N) (i)+(j)*(N)
+
+#define TILE_SIZE 16
 
 
+
+__global__ void zerarCuda(float *C, int N){
+
+
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+
+	int offset;
+
+	if(i<N && j<N){
+		C[DIM(i,j,N)] = 0.0;
+	}
+
+}
+
+__global__ void matMultTileCuda(const float *A, const float *B, float *C, int N){
+	__shared__ float a_tile[TILE_SIZE][TILE_SIZE], b_tile[TILE_SIZE][TILE_SIZE];
+
+	int qtd_tiles = N/TILE_SIZE + (N%TILE_SIZE==0?0:1);
+
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+
+	int offset;
+
+	float sum = 0.0;
+
+
+		
+
+		for (int tile_ind = 0; tile_ind < qtd_tiles; ++tile_ind) {
+			offset = tile_ind*TILE_SIZE;
+			if(i<N && offset+threadIdx.x< N){
+				a_tile[threadIdx.y][threadIdx.x] = A[DIM(i, offset+threadIdx.x, N)];
+			} else{
+				a_tile[threadIdx.y][threadIdx.x] = 0.0;
+			}
+
+			if(threadIdx.y+offset<N && j< N){
+				b_tile[threadIdx.y][threadIdx.x] = B[DIM(threadIdx.y+offset, j, N)];
+			} else{
+				b_tile[threadIdx.y][threadIdx.x] = 0.0;
+			}
+			
+			__syncthreads();
+
+			for (int k = 0; k < TILE_SIZE; ++k) {
+				sum += a_tile[threadIdx.y][k]*b_tile[k][threadIdx.x];
+			}
+
+			__syncthreads();
+		}
+
+		if(i<N && j<N) C[DIM(i,j,N)] = sum;
+	
+
+}
 
 float comparar(float* h_C, float* h_C_cuda, int N){
 	float sum_diff = 0.0;

@@ -56,7 +56,7 @@ int main(int argc, char const *argv[])
 
 	gettimeofday(&tv2, NULL);
 
-	printf ("Total time = %f seconds\n",
+	printf ("Total time = %f seconds\n\n",
          (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
          (double) (tv2.tv_sec - tv1.tv_sec)*1000);
 
@@ -78,7 +78,7 @@ int main(int argc, char const *argv[])
 	err = cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
 	err = cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
 
-	int block_size_x = 32, block_size_y = 8;
+	int block_size_x = TILE_SIZE, block_size_y = TILE_SIZE;
 
     dim3 threads(block_size_x, block_size_y, 1);
     int grid_x = N/block_size_x + (N%block_size_x==0?0:1);
@@ -100,20 +100,37 @@ int main(int argc, char const *argv[])
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
+
+
+
+	printf("Diff matMultCuda = %f\n\n", comparar(h_C, h_C_cuda, N));
+	zerarCuda<<<grid, threads>>>(d_C, N);
+
+	gettimeofday(&tv1, NULL);
+
+	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N);
+
+	gettimeofday(&tv2, NULL);
+
+	printf ("Total time = %f seconds\n",
+         (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
+         (double) (tv2.tv_sec - tv1.tv_sec) * 1000);
+
+
+
+	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
+
+	printf("Diff matMultTileCuda = %f\n\n", comparar(h_C, h_C_cuda, N));
+	zerarCuda<<<grid, threads>>>(d_C, N);
+
 	if(N <= 10) {
 		
 		printf("Matriz Calculada Normal\n");
-		//printMat(h_C, N);		
+		printMat(h_C, N);		
 
 		printf("Matriz Calculada Cuda\n");
 		printMat(h_C_cuda, N);
 	}
-
-
-
-
-	printf("Diff matMultCuda = %f\n", comparar(h_C, h_C_cuda, N));
-
 
 	matTrans<<<grid, threads>>>(d_B, N);
 
@@ -131,8 +148,10 @@ int main(int argc, char const *argv[])
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
-	printf("Diff matMultTransCuda = %f\n", comparar(h_C, h_C_cuda, N));
+	printf("Diff matMultTransCuda = %f\n\n", comparar(h_C, h_C_cuda, N));
 	
+
+
 
 	
 	free(h_A);
