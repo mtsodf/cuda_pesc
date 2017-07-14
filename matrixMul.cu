@@ -56,7 +56,7 @@ int main(int argc, char const *argv[])
 
 	gettimeofday(&tv2, NULL);
 
-	printf ("Total time = %f seconds\n\n",
+	printf ("Total time = %f miliseconds\n\n",
          (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
          (double) (tv2.tv_sec - tv1.tv_sec)*1000);
 
@@ -87,11 +87,11 @@ int main(int argc, char const *argv[])
 
 	gettimeofday(&tv1, NULL);
 
-	matMultCuda<<<grid, threads>>>(d_A, d_B, d_C, N);
+	matMultCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
 	
 	gettimeofday(&tv2, NULL);
 
-	printf ("Total time = %f seconds\n",
+	printf ("Total time = %f miliseconds\n",
          (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
          (double) (tv2.tv_sec - tv1.tv_sec) * 1000);
 
@@ -108,11 +108,11 @@ int main(int argc, char const *argv[])
 
 	gettimeofday(&tv1, NULL);
 
-	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N);
+	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
 
 	gettimeofday(&tv2, NULL);
 
-	printf ("Total time = %f seconds\n",
+	printf ("Total time = %f miliseconds\n",
          (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
          (double) (tv2.tv_sec - tv1.tv_sec) * 1000);
 
@@ -136,11 +136,11 @@ int main(int argc, char const *argv[])
 
 	gettimeofday(&tv1, NULL);
 
-	matMultTransCuda<<<grid, threads>>>(d_A, d_B, d_C, N);
+	matMultTransCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
 	
 	gettimeofday(&tv2, NULL);
 
-	printf ("Total time = %f seconds\n",
+	printf ("Total time = %f miliseconds\n",
          (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
          (double) (tv2.tv_sec - tv1.tv_sec) * 1000);	
 
