@@ -132,9 +132,9 @@ __host__ int main( int argc, char *argv[] ) {
 
 	double start_time, gpu_time;
 	int    h_width, h_height;
-	unsigned char*  h_image_1 = NULL, h_image_2 = NULL, *h_res = NULL;
+	unsigned char*  h_image_1 = NULL, *h_image_2 = NULL, *h_res = NULL;
 	
-	if( argc != 2 ) {
+	if( argc != 3 ) {
 		
 		erro( "Sintaxe: template image" );
 		
@@ -180,8 +180,7 @@ __host__ int main( int argc, char *argv[] ) {
 	unsigned char *d_image_2;
 	cudaMalloc( (void**)&d_image_2, size );
 	cudaMemcpy( d_image_2, h_image_2, size, cudaMemcpyHostToDevice );
-	unsigned char *d_res;
-	cudaMalloc( (void**)&d_res, size );
+
 
 	// Calcula dimensoes da grid e dos blocos
 	dim3 blockSize( 16, 16 );
@@ -194,7 +193,7 @@ __host__ int main( int argc, char *argv[] ) {
 	cout << "Grid   (" << gridSize.x << "," << gridSize.y << ")\n";
 
 	start_time = get_clock_msec();
-	funcGPU<<< gridSize, blockSize >>>( h_width, h_height, d_image_1, d_res );
+	mergeImages<<< gridSize, blockSize >>>( h_width, h_height, d_image_1, d_image_2, d_res );
 	cudaThreadSynchronize();
 	gpu_time = get_clock_msec() - start_time;
 
