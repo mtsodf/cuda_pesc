@@ -141,24 +141,16 @@ __global__ void filter_x( int width, int height, float p, unsigned char *src, un
 
 	int aux, idx;
 
-	if( i < width && j < height ) {
+	if( i > 0 && i < width-1 && j < height ) {
 		for (int k = 0; k < 3; ++k)
 		{
 			aux = 0;
 
-
-			if(i > 0) {
-				idx = 3*ELEM( i-1, j, width );
-				aux-= p*src[ idx+k ];
-			}
-
-
-			if(i < width - 1){
-				idx = 3*ELEM( i+1, j, width );
-				aux+= p*src[ idx+k ];			
-			}
-
-
+			idx = 3*ELEM( i-1, j, width );
+			aux-= p*src[ idx+k ];
+	
+			idx = 3*ELEM( i+1, j, width );
+			aux+= p*src[ idx+k ];			
 
 			dest[ idx+k ] = (unsigned char)abs(aux);		
 		}
@@ -177,22 +169,15 @@ __global__ void filter_y( int width, int height, float p, unsigned char *src, un
 
         int aux, idx;
 
-        if( i < width && j < height ) {
+        if( i < width && j < height-1 && j > 0) {
                 for (int k = 0; k < 3; ++k)
                 {
                         aux = 0;
-
-
-                        if(j > 0) {
-                                idx = 3*ELEM( i, j-1, width );
-                                aux-= p*src[ idx+k ];
-                        }
-
-
-                        if(j < height - 1){
-                                idx = 3*ELEM( i, j+1, width );
-                                aux+= p*src[ idx+k ];
-                        }
+                        idx = 3*ELEM( i, j-1, width );
+                        aux-= p*src[ idx+k ];
+                        
+                        idx = 3*ELEM( i, j+1, width );
+                        aux+= p*src[ idx+k ];
 
 
                         dest[ idx+k ] = (unsigned char)abs(aux);
@@ -214,36 +199,28 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
 
 	int aux_x, aux_y, idx;
 
-	if( i < width && j < height ) {
+	if( i > 0 && i < width-1 && j < height-1 && j > 0) {
 		for (int k = 0; k < 3; ++k)
 		{
 			aux_x = 0;
 			aux_y = 0;
 
 
-			if(j > 0) {
-				idx = 3*ELEM( i, j-1, width );
-				aux_y-= p*src[ idx+k ];
-			}
+			idx = 3*ELEM( i, j-1, width );
+			aux_y-= p*src[ idx+k ];
+		
 
+			idx = 3*ELEM( i, j+1, width );
+			aux_y+= p*src[ idx+k ];			
+			
 
-			if(j < height - 1){
-				idx = 3*ELEM( i, j+1, width );
-				aux_y+= p*src[ idx+k ];			
-			}
+            idx = 3*ELEM( i-1, j, width );
+            aux_x-= p*src[ idx+k ];
+            
 
-
-                        if(i > 0) {
-                                idx = 3*ELEM( i-1, j, width );
-                                aux_x-= p*src[ idx+k ];
-                        }
-
-
-                        if(i < width - 1){
-                                idx = 3*ELEM( i+1, j, width );
-                                aux_x+= p*src[ idx+k ];
-                        }
-
+            idx = 3*ELEM( i+1, j, width );
+            aux_x+= p*src[ idx+k ];
+            
 
 			dest[ idx+k ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
 		}
@@ -252,6 +229,7 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
 	}
 
 }
+
 
 
 
@@ -340,42 +318,83 @@ __host__ int main( int argc, char *argv[] ) {
 	cout << "Blocks (" << blockSize.x << "," << blockSize.y << ")\n";
 	cout << "Grid   (" << gridSize.x << "," << gridSize.y << ")\n";
 
+	//Filtro em x
+
+	start_time = get_clock_msec();
+    filter_x<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;
+	printf("\tTempo filtro x: %f\n", gpu_time);
+    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_x.ppm", h_res, h_width, h_height );
+
+
+    //Filtro em y
+	start_time = get_clock_msec();
+    filter_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;
+	printf("\tTempo filtro y: %f\n", gpu_time);	
+    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_y.ppm", h_res, h_width, h_height );
+
+
+    //Filtro em x e y
+	start_time = get_clock_msec();
+    filter_x_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;   
+	printf("\tTempo filtro x e y: %f\n", gpu_time); 
+	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_x_y.ppm", h_res, h_width, h_height );
+
+	printf("---------------------------------------------------------\n");
+	printf("Filtro para imagem tom de cinza\n");
+	printf("---------------------------------------------------------\n");
+
 	start_time = get_clock_msec();
 	tom_cinza<<< gridSize, blockSize >>>( h_width, h_height, d_image, d_res_cinza );
 	cudaThreadSynchronize();
 	gpu_time = get_clock_msec() - start_time;
 
-	// Copy result buffer back to cpu memory
-	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-	//cudaMemcpy( h_res, d_image, size, cudaMemcpyDeviceToHost );
+	printf("Tempo tom cinza: %f\n", gpu_time); 
 
-	// Salva imagem resultado
+	cudaMemcpy( h_res, d_res_cinza, size, cudaMemcpyDeviceToHost );
 	savePPM( (char *)"cinza.ppm", h_res, h_width, h_height );
 
+	//Copia imagem cinza para d_image
 	cudaMemcpy( d_image, d_res_cinza, size, cudaMemcpyDeviceToDevice );
-	
+
+
 	//Filtro em x
-	filter_x<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
+
+	start_time = get_clock_msec();
+    filter_x<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;
+	printf("\tTempo filtro x: %f\n", gpu_time);
+    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_cinza_x.ppm", h_res, h_width, h_height );
+
+
+    //Filtro em y
+	start_time = get_clock_msec();
+    filter_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;
+	printf("\tTempo filtro y: %f\n", gpu_time);	
+    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_cinza_y.ppm", h_res, h_width, h_height );
+
+
+    //Filtro em x e y
+	start_time = get_clock_msec();
+    filter_x_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;   
+	printf("\tTempo filtro x e y: %f\n", gpu_time); 
 	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-	savePPM( (char *)"filtro_x.ppm", h_res, h_width, h_height );	
-
-	
-	//Filtro em y
-        filter_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
-        cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-        savePPM( (char *)"filtro_y.ppm", h_res, h_width, h_height );
-
-	
-	//Filtro em x e y
-        filter_x_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
-        cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-        savePPM( (char *)"filtro_x_y.ppm", h_res, h_width, h_height );
-
-
-
-	// Imprime tempo
-	cout << "\tTempo de execucao da GPU: " << gpu_time << endl;
-	cout << "-------------------------------------------" << endl;
+    savePPM( (char *)"filtro_cinza_x_y.ppm", h_res, h_width, h_height );
 
 	// Free buffers
 	cudaFree( d_image );
