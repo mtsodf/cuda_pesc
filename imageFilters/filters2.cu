@@ -22,6 +22,7 @@
 ***************************************************************************************************/
 
 #define ELEM(i,j,DIMX_) (i+(j)*(DIMX_))
+#define BLOCK_SIZE 16
 
 
 /***************************************************************************************************
@@ -200,33 +201,143 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
 	int aux_x, aux_y, idx;
 
 	if( i > 0 && i < width-1 && j < height-1 && j > 0) {
-		for (int k = 0; k < 3; ++k)
-		{
-			aux_x = 0;
-			aux_y = 0;
+		aux_x = 0;
+		aux_y = 0;
+
+		idx = 3*ELEM( i, j-1, width );
+		aux_y-= p*src[ idx+0 ];
+		idx = 3*ELEM( i, j+1, width );
+		aux_y+= p*src[ idx+0 ];
+
+        idx = 3*ELEM( i-1, j, width );		
+		aux_x-= p*src[ idx+0 ];				
+        idx = 3*ELEM( i+1, j, width );
+        aux_x+= p*src[ idx+0 ];			
+            
+		dest[ idx+0 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
+
+		aux_x = 0;
+		aux_y = 0;
+
+		idx = 3*ELEM( i, j-1, width );
+		aux_y-= p*src[ idx+1 ];
+		idx = 3*ELEM( i, j+1, width );
+		aux_y+= p*src[ idx+1 ];
+
+        idx = 3*ELEM( i-1, j, width );		
+		aux_x-= p*src[ idx+1 ];				
+        idx = 3*ELEM( i+1, j, width );
+        aux_x+= p*src[ idx+1 ];			
+            
+		dest[ idx+1 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);	
 
 
-			idx = 3*ELEM( i, j-1, width );
-			aux_y-= p*src[ idx+k ];
+
+		aux_x = 0;
+		aux_y = 0;
+
+		idx = 3*ELEM( i, j-1, width );
+		aux_y-= p*src[ idx+2 ];
+		idx = 3*ELEM( i, j+1, width );
+		aux_y+= p*src[ idx+2 ];
+
+        idx = 3*ELEM( i-1, j, width );		
+		aux_x-= p*src[ idx+2 ];				
+        idx = 3*ELEM( i+1, j, width );
+        aux_x+= p*src[ idx+2 ];		
+
+		dest[ idx+2 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
+	}
 		
 
-			idx = 3*ELEM( i, j+1, width );
-			aux_y+= p*src[ idx+k ];			
-			
+}
 
-            idx = 3*ELEM( i-1, j, width );
-            aux_x-= p*src[ idx+k ];
-            
 
-            idx = 3*ELEM( i+1, j, width );
-            aux_x+= p*src[ idx+k ];
-            
 
-			dest[ idx+k ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
+__global__ void filter_x_y_sm( int width, int height, float p, unsigned char *src, unsigned char *dest ) {
+	__shared__ float r[BLOCK_SIZE+2][BLOCK_SIZE+2], g[BLOCK_SIZE+2][BLOCK_SIZE+2], b[BLOCK_SIZE+2][BLOCK_SIZE+2];
+	int idx;
+	int i = threadIdx.x + blockIdx.x*blockDim.x;
+	int j = threadIdx.y + blockIdx.y*blockDim.y;
+	float aux_x, aux_y;
+	//Copia dos valores para o tile
+
+	if(i < width && j < height){
+		idx = 3*ELEM(i,j,width);
+		r[threadIdx.x+1][threadIdx.y+1] = src[idx+2];
+		g[threadIdx.x+1][threadIdx.y+1] = src[idx+1];
+		b[threadIdx.x+1][threadIdx.y+1] = src[idx+0];
+	
+
+		if(blockIdx.y > 0 && threadIdx.y == 0){
+			int idx = 3*ELEM(i,j-1,width);
+			r[threadIdx.x+1][threadIdx.y] = src[idx+2];
+			g[threadIdx.x+1][threadIdx.y] = src[idx+1];
+			b[threadIdx.x+1][threadIdx.y] = src[idx+0];
 		}
+
+		if(blockIdx.y < gridDim.y - 1 && threadIdx.y == blockDim.y-1){
+			int idx = 3*ELEM(i,j+1,width);
+			r[threadIdx.x+1][threadIdx.y+2] = src[idx+2];
+			g[threadIdx.x+1][threadIdx.y+2] = src[idx+1];
+			b[threadIdx.x+1][threadIdx.y+2] = src[idx+0];
+		}
+
+		if(blockIdx.x > 0 && threadIdx.x == 0){
+			int idx = 3*ELEM(i-1,j,width);
+			r[threadIdx.x][threadIdx.y+1] = src[idx+2];
+			g[threadIdx.x][threadIdx.y+1] = src[idx+1];
+			b[threadIdx.x][threadIdx.y+1] = src[idx+0];
+		}
+
+		if(blockIdx.x < gridDim.x - 1 && threadIdx.x == blockDim.x-1){
+			int idx = 3*ELEM(i+1,j,width);
+			r[threadIdx.x+2][threadIdx.y+1] = src[idx+2];
+			g[threadIdx.x+2][threadIdx.y+1] = src[idx+1];
+			b[threadIdx.x+2][threadIdx.y+1] = src[idx+0];
+		}
+	}
+	__syncthreads();
+
+	if( i > 0 && i < width-1 && j < height-1 && j > 0){
+		idx = 3*ELEM(i,j,width);
 		
+		aux_x = 0;
+		aux_y = 0;
+
+		aux_y-= p*b[threadIdx.x+1][threadIdx.y+0];
+		aux_y+= p*b[threadIdx.x+1][threadIdx.y+2];
+
+		aux_x-= p*b[threadIdx.x+0][threadIdx.y+1];			
+		aux_x+= p*b[threadIdx.x+2][threadIdx.y+1];			
+            
+		dest[ idx+0 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
+
+
+		aux_x = 0;
+		aux_y = 0;
+
+		aux_y-= p*g[threadIdx.x+1][threadIdx.y+0];
+		aux_y+= p*g[threadIdx.x+1][threadIdx.y+2];
+
+		aux_x-= p*g[threadIdx.x+0][threadIdx.y+1];			
+		aux_x+= p*g[threadIdx.x+2][threadIdx.y+1];			
+            
+		dest[ idx+1 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);	
+	
+		aux_x = 0;
+		aux_y = 0;
+
+		aux_y-= p*r[threadIdx.x+1][threadIdx.y+0];
+		aux_y+= p*r[threadIdx.x+1][threadIdx.y+2];
+
+		aux_x-= p*r[threadIdx.x+0][threadIdx.y+1];			
+		aux_x+= p*r[threadIdx.x+2][threadIdx.y+1];			
+            
+		dest[ idx+2 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);	
 
 	}
+
 
 }
 
@@ -236,9 +347,9 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
 __global__ void tom_cinza( int width, int height,  unsigned char *src, unsigned char *dest ) {
 	
 	int i = threadIdx.x + blockIdx.x*blockDim.x;
-        int j = threadIdx.y + blockIdx.y*blockDim.y;
+    int j = threadIdx.y + blockIdx.y*blockDim.y;
 
-        int cinza, idx;
+    int cinza, idx;
 	int r,g,b;
 	
 	if(i < width && j < height){
@@ -272,21 +383,20 @@ __host__ int main( int argc, char *argv[] ) {
 	}
 
 
-        int deviceCount;
-        cudaGetDeviceCount(&deviceCount);
-        // This function call returns 0 if there are no CUDA capable devices.
-        if( deviceCount == 0 ) {
-                printf("There is no device supporting CUDA\n");
-                exit( 1 );
-        }
+	int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+	printf("Device Count %d\n", deviceCount);
+    // This function call returns 0 if there are no CUDA capable devices.
+    if( deviceCount == 0 ) {
+        printf("There is no device supporting CUDA\n");
+        exit( 1 );
+    }
 
-        if(deviceCount < 2){
-                printf("Nao tem placa grafica disponivel\n");
-        }
+    if(deviceCount < 2){
+    	printf("Nao tem placa grafica disponivel\n");
+    }
 
-        printf("Device Count %d\n", deviceCount);
-
-        cudaSetDevice(1);
+    cudaSetDevice(deviceCount - 1);
 
 
 	cout << "Program for image treatment " << endl;
@@ -309,7 +419,7 @@ __host__ int main( int argc, char *argv[] ) {
 	cudaMalloc( (void**)&d_res_cinza, size );
 
 	// Calcula dimensoes da grid e dos blocos
-	dim3 blockSize( 16, 16 );
+	dim3 blockSize( BLOCK_SIZE, BLOCK_SIZE );
 
 	int numBlocosX = h_width  / blockSize.x + ( h_width  % blockSize.x == 0 ? 0 : 1 );
 	int numBlocosY = h_height / blockSize.y + ( h_height % blockSize.y == 0 ? 0 : 1 );
@@ -395,6 +505,16 @@ __host__ int main( int argc, char *argv[] ) {
 	printf("\tTempo filtro x e y: %f\n", gpu_time); 
 	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_cinza_x_y.ppm", h_res, h_width, h_height );
+
+
+    //Filtro em x e y
+	start_time = get_clock_msec();
+    filter_x_y_sm<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
+	cudaThreadSynchronize();
+	gpu_time = get_clock_msec() - start_time;   
+	printf("\tTempo filtro x e y sm: %f\n", gpu_time); 
+	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_cinza_x_y_sm.ppm", h_res, h_width, h_height );	
 
 	// Free buffers
 	cudaFree( d_image );
