@@ -213,7 +213,8 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
 		aux_x-= p*src[ idx+0 ];				
         idx = 3*ELEM( i+1, j, width );
         aux_x+= p*src[ idx+0 ];			
-            
+        
+		idx = 3*ELEM( i, j, width );
 		dest[ idx+0 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
 
 		aux_x = 0;
@@ -228,7 +229,8 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
 		aux_x-= p*src[ idx+1 ];				
         idx = 3*ELEM( i+1, j, width );
         aux_x+= p*src[ idx+1 ];			
-            
+        
+		idx = 3*ELEM( i, j, width );
 		dest[ idx+1 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);	
 
 
@@ -246,6 +248,7 @@ __global__ void filter_x_y( int width, int height, float p, unsigned char *src, 
         idx = 3*ELEM( i+1, j, width );
         aux_x+= p*src[ idx+2 ];		
 
+		idx = 3*ELEM( i, j, width );
 		dest[ idx+2 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);		
 	}
 		
@@ -270,28 +273,28 @@ __global__ void filter_x_y_sm( int width, int height, float p, unsigned char *sr
 	
 
 		if(blockIdx.y > 0 && threadIdx.y == 0){
-			int idx = 3*ELEM(i,j-1,width);
+			idx = 3*ELEM(i,j-1,width);
 			r[threadIdx.x+1][threadIdx.y] = src[idx+2];
 			g[threadIdx.x+1][threadIdx.y] = src[idx+1];
 			b[threadIdx.x+1][threadIdx.y] = src[idx+0];
 		}
 
 		if(blockIdx.y < gridDim.y - 1 && threadIdx.y == blockDim.y-1){
-			int idx = 3*ELEM(i,j+1,width);
+			idx = 3*ELEM(i,j+1,width);
 			r[threadIdx.x+1][threadIdx.y+2] = src[idx+2];
 			g[threadIdx.x+1][threadIdx.y+2] = src[idx+1];
 			b[threadIdx.x+1][threadIdx.y+2] = src[idx+0];
 		}
 
 		if(blockIdx.x > 0 && threadIdx.x == 0){
-			int idx = 3*ELEM(i-1,j,width);
+			idx = 3*ELEM(i-1,j,width);
 			r[threadIdx.x][threadIdx.y+1] = src[idx+2];
 			g[threadIdx.x][threadIdx.y+1] = src[idx+1];
 			b[threadIdx.x][threadIdx.y+1] = src[idx+0];
 		}
 
 		if(blockIdx.x < gridDim.x - 1 && threadIdx.x == blockDim.x-1){
-			int idx = 3*ELEM(i+1,j,width);
+			idx = 3*ELEM(i+1,j,width);
 			r[threadIdx.x+2][threadIdx.y+1] = src[idx+2];
 			g[threadIdx.x+2][threadIdx.y+1] = src[idx+1];
 			b[threadIdx.x+2][threadIdx.y+1] = src[idx+0];
