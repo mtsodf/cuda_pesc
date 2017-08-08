@@ -25,8 +25,6 @@ int main(int argc, char const *argv[])
 
 	int size = N*N*sizeof(float);
 
-	printf("Hello World!\n");
-
 	if(argc < 2) {
 		printf("Passe o tamanho da matriz como referencia.\n");
 		return -1;
@@ -96,6 +94,9 @@ int main(int argc, char const *argv[])
     int grid_y = N/block_size_y + (N%block_size_y==0?0:1);
     dim3 grid(grid_x, grid_y, 1);
 
+	printf("Grid(%d, %d) - Bloco(%d, %d)\n\n", grid_x, grid_y, block_size_x, block_size_y);
+
+	cudaDeviceSynchronize();
 	start_time = get_clock_msec();
 
 	matMultCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
@@ -111,6 +112,7 @@ int main(int argc, char const *argv[])
 
 	zerarCuda<<<grid, threads>>>(d_C, N);
 
+	cudaDeviceSynchronize();
 	start_time = get_clock_msec();
 	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
 	gpu_time = get_clock_msec() - start_time;  
@@ -134,6 +136,7 @@ int main(int argc, char const *argv[])
 
 	matTrans<<<grid, threads>>>(d_B, N);
 
+	cudaDeviceSynchronize();
 	start_time = get_clock_msec();
 	matMultTransCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
 	gpu_time = get_clock_msec() - start_time;  
