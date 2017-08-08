@@ -19,7 +19,7 @@ int main(int argc, char const *argv[])
 	double start_time, gpu_time;
 
 
-	cudaError_t err = cudaSuccess;
+	cudaError_t err;
 
 	int N = atoi(argv[1]);
 
@@ -32,7 +32,20 @@ int main(int argc, char const *argv[])
 		return -1;
 	}
 
-	
+	int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+	printf("Device Count %d\n", deviceCount);
+    // This function call returns 0 if there are no CUDA capable devices.
+    if( deviceCount == 0 ) {
+        printf("There is no device supporting CUDA\n");
+        exit( 1 );
+    }
+
+    if(deviceCount < 2){
+    	printf("Nao tem placa grafica disponivel\n");
+    }
+
+    cudaSetDevice(deviceCount - 1);	
 
 
 	printf("Dimensao da matriz %d\n", N);
@@ -129,8 +142,6 @@ int main(int argc, char const *argv[])
 
 	printf("Diff matMultTransCuda = %f\n", comparar(h_C, h_C_cuda, N));
 	printf ("Total time = %f miliseconds\n\n", gpu_time);
-
-
 
 	
 	free(h_A);
