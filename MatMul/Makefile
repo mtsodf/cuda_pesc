@@ -4,17 +4,17 @@ all: testeBlockSizeTrans testeBlockSize matrixMul
 
 testeBlockSizeTrans: 
 	mkdir -p bin
-	nvcc -o testeBlockSizeTrans testeBlockSizeTrans.cu
+	nvcc -o testeBlockSizeTrans testeBlockSizeTrans.cu rf-time.cc
 	mv testeBlockSizeTrans ./bin
 
 testeBlockSize: 
 	mkdir -p bin
-	nvcc -o testeBlockSize testeBlockSize.cu
+	nvcc -o testeBlockSize testeBlockSize.cu rf-time.cc
 	mv testeBlockSize ./bin
 	
 matrixMul: 
 	mkdir -p bin
-	nvcc -o matrixMul matrixMul.cu
+	nvcc -o matrixMul matrixMul.cu rf-time.cc
 	mv matrixMul ./bin
 	
 clean:

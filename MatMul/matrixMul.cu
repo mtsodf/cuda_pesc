@@ -4,12 +4,9 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include "matrixMult.h"
+#include "rf-time.h"
 // For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
-
-
-
-
 
 
 struct timeval  tv1, tv2;
@@ -18,6 +15,9 @@ struct timeval  tv1, tv2;
 
 int main(int argc, char const *argv[])
 {
+
+	double start_time, gpu_time;
+
 
 	cudaError_t err = cudaSuccess;
 
@@ -50,15 +50,13 @@ int main(int argc, char const *argv[])
 	inicMat(h_B, N, 1.0);
 	inicMat(h_C, N, 0.0);
 
-	gettimeofday(&tv1, NULL);
+	start_time = get_clock_msec();
 
 	matMult(h_A, h_B, h_C, N);
 
-	gettimeofday(&tv2, NULL);
+	gpu_time = get_clock_msec() - start_time;  
 
-	printf ("Total time = %f miliseconds\n\n",
-         (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
-         (double) (tv2.tv_sec - tv1.tv_sec)*1000);
+	printf ("Total time = %f miliseconds\n\n", gpu_time);
 
 
 
@@ -85,42 +83,31 @@ int main(int argc, char const *argv[])
     int grid_y = N/block_size_y + (N%block_size_y==0?0:1);
     dim3 grid(grid_x, grid_y, 1);
 
-	gettimeofday(&tv1, NULL);
+	start_time = get_clock_msec();
 
 	matMultCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
-	
-	gettimeofday(&tv2, NULL);
 
-	printf ("Total time = %f miliseconds\n",
-         (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
-         (double) (tv2.tv_sec - tv1.tv_sec) * 1000);
-
+	gpu_time = get_clock_msec() - start_time;  
 
 
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
+	printf("Diff matMultCuda = %f\n", comparar(h_C, h_C_cuda, N));
+	printf ("Total time = %f miliseconds\n\n", gpu_time);
 
-
-
-	printf("Diff matMultCuda = %f\n\n", comparar(h_C, h_C_cuda, N));
 	zerarCuda<<<grid, threads>>>(d_C, N);
 
-	gettimeofday(&tv1, NULL);
-
+	start_time = get_clock_msec();
 	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
-
-	gettimeofday(&tv2, NULL);
-
-	printf ("Total time = %f miliseconds\n",
-         (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
-         (double) (tv2.tv_sec - tv1.tv_sec) * 1000);
-
-
+	gpu_time = get_clock_msec() - start_time;  
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
-	printf("Diff matMultTileCuda = %f\n\n", comparar(h_C, h_C_cuda, N));
+	printf("Diff matMultTileCuda = %f\n", comparar(h_C, h_C_cuda, N));
+	printf ("Total time = %f miliseconds\n\n", gpu_time);
+
+
 	zerarCuda<<<grid, threads>>>(d_C, N);
 
 	if(N <= 10) {
@@ -134,22 +121,14 @@ int main(int argc, char const *argv[])
 
 	matTrans<<<grid, threads>>>(d_B, N);
 
-	gettimeofday(&tv1, NULL);
-
+	start_time = get_clock_msec();
 	matMultTransCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
-	
-	gettimeofday(&tv2, NULL);
-
-	printf ("Total time = %f miliseconds\n",
-         (double) (tv2.tv_usec - tv1.tv_usec) / 1000 +
-         (double) (tv2.tv_sec - tv1.tv_sec) * 1000);	
-
-
+	gpu_time = get_clock_msec() - start_time;  
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
-	printf("Diff matMultTransCuda = %f\n\n", comparar(h_C, h_C_cuda, N));
-	
+	printf("Diff matMultTransCuda = %f\n", comparar(h_C, h_C_cuda, N));
+	printf ("Total time = %f miliseconds\n\n", gpu_time);
 
 
 
