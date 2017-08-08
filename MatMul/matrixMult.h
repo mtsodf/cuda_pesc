@@ -11,8 +11,6 @@ __global__ void zerarCuda(float *C, int N){
     int i = blockDim.y * blockIdx.y + threadIdx.y;
     int j = blockDim.x * blockIdx.x + threadIdx.x;
 
-	int offset;
-
 	if(i<N && j<N){
 		C[DIM(i,j,N)] = 0.0;
 	}
