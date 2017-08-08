@@ -345,6 +345,92 @@ __global__ void filter_x_y_sm( int width, int height, float p, unsigned char *sr
 }
 
 
+__global__ void filter_x_y_sm( int width, int height, float p, unsigned char *src, unsigned char *dest , int threshold) {
+	__shared__ float r[BLOCK_SIZE+2][BLOCK_SIZE+2], g[BLOCK_SIZE+2][BLOCK_SIZE+2], b[BLOCK_SIZE+2][BLOCK_SIZE+2];
+	int idx;
+	int i = threadIdx.x + blockIdx.x*blockDim.x;
+	int j = threadIdx.y + blockIdx.y*blockDim.y;
+	float aux_x, aux_y;
+	//Copia dos valores para o tile
+
+	if(i < width && j < height){
+		idx = 3*ELEM(i,j,width);
+		r[threadIdx.x+1][threadIdx.y+1] = src[idx+2];
+		g[threadIdx.x+1][threadIdx.y+1] = src[idx+1];
+		b[threadIdx.x+1][threadIdx.y+1] = src[idx+0];
+	
+
+		if(blockIdx.y > 0 && threadIdx.y == 0){
+			idx = 3*ELEM(i,j-1,width);
+			r[threadIdx.x+1][threadIdx.y] = src[idx+2];
+			g[threadIdx.x+1][threadIdx.y] = src[idx+1];
+			b[threadIdx.x+1][threadIdx.y] = src[idx+0];
+		}
+
+		if(blockIdx.y < gridDim.y - 1 && threadIdx.y == blockDim.y-1){
+			idx = 3*ELEM(i,j+1,width);
+			r[threadIdx.x+1][threadIdx.y+2] = src[idx+2];
+			g[threadIdx.x+1][threadIdx.y+2] = src[idx+1];
+			b[threadIdx.x+1][threadIdx.y+2] = src[idx+0];
+		}
+
+		if(blockIdx.x > 0 && threadIdx.x == 0){
+			idx = 3*ELEM(i-1,j,width);
+			r[threadIdx.x][threadIdx.y+1] = src[idx+2];
+			g[threadIdx.x][threadIdx.y+1] = src[idx+1];
+			b[threadIdx.x][threadIdx.y+1] = src[idx+0];
+		}
+
+		if(blockIdx.x < gridDim.x - 1 && threadIdx.x == blockDim.x-1){
+			idx = 3*ELEM(i+1,j,width);
+			r[threadIdx.x+2][threadIdx.y+1] = src[idx+2];
+			g[threadIdx.x+2][threadIdx.y+1] = src[idx+1];
+			b[threadIdx.x+2][threadIdx.y+1] = src[idx+0];
+		}
+	}
+	__syncthreads();
+
+	if( i > 0 && i < width-1 && j < height-1 && j > 0){
+		idx = 3*ELEM(i,j,width);
+		
+		aux_x = 0;
+		aux_y = 0;
+
+		aux_y-= p*b[threadIdx.x+1][threadIdx.y+0];
+		aux_y+= p*b[threadIdx.x+1][threadIdx.y+2];
+
+		aux_x-= p*b[threadIdx.x+0][threadIdx.y+1];			
+		aux_x+= p*b[threadIdx.x+2][threadIdx.y+1];			
+            
+		dest[ idx+0 ] = ((unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y) >= threshold)*255;	
+
+
+		aux_x = 0;
+		aux_y = 0;
+
+		aux_y-= p*g[threadIdx.x+1][threadIdx.y+0];
+		aux_y+= p*g[threadIdx.x+1][threadIdx.y+2];
+
+		aux_x-= p*g[threadIdx.x+0][threadIdx.y+1];			
+		aux_x+= p*g[threadIdx.x+2][threadIdx.y+1];			
+            
+		dest[ idx+1 ] = ((unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y) >= threshold)*255;		
+	
+		aux_x = 0;
+		aux_y = 0;
+
+		aux_y-= p*r[threadIdx.x+1][threadIdx.y+0];
+		aux_y+= p*r[threadIdx.x+1][threadIdx.y+2];
+
+		aux_x-= p*r[threadIdx.x+0][threadIdx.y+1];			
+		aux_x+= p*r[threadIdx.x+2][threadIdx.y+1];			
+            
+		dest[ idx+2 ] = ((unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y) >= threshold)*255;	
+
+	}
+
+
+}
 
 
 __global__ void tom_cinza( int width, int height,  unsigned char *src, unsigned char *dest ) {
@@ -518,6 +604,15 @@ __host__ int main( int argc, char *argv[] ) {
 	printf("\tTempo filtro x e y sm: %f\n", gpu_time); 
 	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_cinza_x_y_sm.ppm", h_res, h_width, h_height );	
+
+
+	char name[100];
+	for(int threshold = 1; threshold < 255; threshold+= 20){
+		filter_x_y_sm<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res , threshold);
+		cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+		sprintf(name, "filtro_cinza_x_y_sm_%d.ppm", threshold);
+    	savePPM( name, h_res, h_width, h_height );			
+	}
 
 	// Free buffers
 	cudaFree( d_image );
