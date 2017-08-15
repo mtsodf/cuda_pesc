@@ -22,7 +22,7 @@
 ***************************************************************************************************/
 
 #define ELEM(i,j,DIMX_) (i+(j)*(DIMX_))
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 
 
 /***************************************************************************************************
@@ -592,13 +592,19 @@ __host__ int main( int argc, char *argv[] ) {
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_y.ppm", h_res, h_width, h_height );
 
+    cudaEvent_t startCuda, stopCuda; float ms;
+	cudaEventCreate(&startCuda); cudaEventCreate(&stopCuda);
 
     //Filtro em x e y
 	start_time = get_clock_msec();
+	cudaEventRecord(startCuda, 0);
     filter_x_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
+    cudaEventRecord(stopCuda);
+    cudaEventSynchronize(stopCuda);
+    cudaEventElapsedTime(&ms, startCuda, stopCuda);
 	cudaThreadSynchronize();
 	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x e y: %f\n", gpu_time);
+	printf("\tTempo filtro x e y: %f\t%f\n", gpu_time, ms);
 	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_x_y.ppm", h_res, h_width, h_height );
 
@@ -671,15 +677,14 @@ __host__ int main( int argc, char *argv[] ) {
 
 	numBlocosX = (h_width-2) / (blockSize.x-2) + ( (h_width-2)  % (blockSize.x-2) == 0 ? 0 : 1 );
 	numBlocosY = (h_height-2) / (blockSize.y-2) + ( (h_height-2)  % (blockSize.y-2) == 0 ? 0 : 1 );
-	//gridSize( numBlocosX, numBlocosY, 1 );
 	dim3 gridSize2(numBlocosX, numBlocosY, 1);
 
 	cout << "Blocks (" << blockSize.x << "," << blockSize.y << ")\n";
-	cout << "Grid   (" << gridSize.x << "," << gridSize.y << ")\n";
+	cout << "Grid   (" << gridSize2.x << "," << gridSize2.y << ")\n";
 
 	cudaThreadSynchronize();
 	start_time = get_clock_msec();
-    filter_x_y_sm_2<<< gridSize2, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
+    	filter_x_y_sm_2<<< gridSize2, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
 	cudaThreadSynchronize();
 	gpu_time = get_clock_msec() - start_time;
 	printf("\tTempo filtro x e y sm 2: %f\n", gpu_time);

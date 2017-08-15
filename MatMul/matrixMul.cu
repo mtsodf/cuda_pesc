@@ -17,8 +17,7 @@ int main(int argc, char const *argv[])
 {
 
 	double start_time, gpu_time;
-
-
+    
 	cudaError_t err;
 
 	int N = atoi(argv[1]);
@@ -29,6 +28,8 @@ int main(int argc, char const *argv[])
 		printf("Passe o tamanho da matriz como referencia.\n");
 		return -1;
 	}
+
+    
 
 	int deviceCount;
     cudaGetDeviceCount(&deviceCount);
@@ -96,11 +97,18 @@ int main(int argc, char const *argv[])
 
 	printf("Grid(%d, %d) - Bloco(%d, %d)\n\n", grid_x, grid_y, block_size_x, block_size_y);
 
+    cudaEvent_t startCuda, stopCuda; float ms;
+	cudaEventCreate(&startCuda); cudaEventCreate(&stopCuda);
 	cudaDeviceSynchronize();
 	start_time = get_clock_msec();
-
-	matMultCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
-
+    
+    cudaEventRecord(startCuda, 0);
+	matMultCuda<<<grid, threads>>>(d_A, d_B, d_C, N);
+    cudaEventRecord(stopCuda);
+    cudaEventSynchronize(stopCuda);
+    cudaEventElapsedTime(&ms, startCuda, stopCuda);
+  
+    cudaDeviceSynchronize();
 	gpu_time = get_clock_msec() - start_time;  
 
 
@@ -108,19 +116,25 @@ int main(int argc, char const *argv[])
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
 	printf("Diff matMultCuda = %f\n", comparar(h_C, h_C_cuda, N));
-	printf ("Total time = %f miliseconds\n\n", gpu_time);
+	printf ("Total time = %f cpu %f gpu\n\n", gpu_time, ms);
 
 	zerarCuda<<<grid, threads>>>(d_C, N);
 
 	cudaDeviceSynchronize();
 	start_time = get_clock_msec();
-	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
+	cudaEventRecord(startCuda, 0);
+	matMultTileCuda<<<grid, threads>>>(d_A, d_B, d_C, N); 
+    cudaEventRecord(stopCuda);
+    cudaEventSynchronize(stopCuda);
+    cudaEventElapsedTime(&ms, startCuda, stopCuda);
+
+	cudaDeviceSynchronize();
 	gpu_time = get_clock_msec() - start_time;  
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
 	printf("Diff matMultTileCuda = %f\n", comparar(h_C, h_C_cuda, N));
-	printf ("Total time = %f miliseconds\n\n", gpu_time);
+	printf ("Total time = %f cpu %f gpu\n\n", gpu_time, ms);
 
 
 	zerarCuda<<<grid, threads>>>(d_C, N);
@@ -138,13 +152,18 @@ int main(int argc, char const *argv[])
 
 	cudaDeviceSynchronize();
 	start_time = get_clock_msec();
-	matMultTransCuda<<<grid, threads>>>(d_A, d_B, d_C, N); cudaDeviceSynchronize();
+	cudaEventRecord(startCuda, 0);
+	matMultTransCuda<<<grid, threads>>>(d_A, d_B, d_C, N);
+    cudaEventRecord(stopCuda);
+    cudaEventSynchronize(stopCuda);
+    cudaEventElapsedTime(&ms, startCuda, stopCuda);
+
 	gpu_time = get_clock_msec() - start_time;  
 
 	err = cudaMemcpy(h_C_cuda, d_C, size, cudaMemcpyDeviceToHost);
 
 	printf("Diff matMultTransCuda = %f\n", comparar(h_C, h_C_cuda, N));
-	printf ("Total time = %f miliseconds\n\n", gpu_time);
+	printf ("Total time = %f cpu %f gpu\n\n", gpu_time, ms);
 
 	
 	free(h_A);
