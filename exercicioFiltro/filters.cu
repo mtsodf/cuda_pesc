@@ -77,7 +77,9 @@ __host__ void readPPM( char *fname, unsigned char **buffer, int *width, int *hei
 
 	int size = 3*(*width)*(*height)*sizeof( unsigned char );
 	cout << "Image dimension: (" << *width << "," << *height <<")\n";
-
+//    cudaEventRecord(stopCuda);
+//    cudaEventSynchronize(stopCuda);
+//    cudaEventElapsedTime(&ms, startCuda, stopCuda);
 	if( ( *buffer = (unsigned char *)malloc( size ) ) == NULL )
 		erro( "Error allocating image" );
 
@@ -87,6 +89,12 @@ __host__ void readPPM( char *fname, unsigned char **buffer, int *width, int *hei
 }
 
 /**************************************************************************************************/
+/*
+ Filtro Blur com os seguintes pesos
+    2
+  2 4 2 /12
+    2
+*/
 __global__ void filter1( int width, int height, unsigned char *src, unsigned char *dest ) {
 
 	int i = threadIdx.x + blockIdx.x*blockDim.x;
@@ -94,7 +102,7 @@ __global__ void filter1( int width, int height, unsigned char *src, unsigned cha
 
 	int aux, idx;
 
-	if( i < width && j < height ) {
+	if(i > 0 && j > 0 && i < width - 1 && j < height - 1) {
 		for (int k = 0; k < 3; ++k)
 		{
 			aux = 0;
@@ -102,423 +110,75 @@ __global__ void filter1( int width, int height, unsigned char *src, unsigned cha
 
 			aux += 4*src[ idx+k ];
 
-			if(i > 0) {
-				idx = 3*ELEM( i-1, j, width );
-				aux+= src[ idx+k ];
-			}
-
-			if(j > 0){
-				idx = 3*ELEM( i, j-1, width );
-				aux+= src[ idx+k ];
-			}
-
-			if(i < width - 1){
-				idx = 3*ELEM( i+1, j, width );
-				aux+= src[ idx+k ];
-			}
-
-			if(j < height - 1){
-				idx = 3*ELEM( i, j+1, width );
-				aux+= src[ idx+k ];
-			}
-
-			aux /= 8;
-
-			dest[ idx+k ] = (unsigned char)aux;
-		}
-
-
-
-
-	}
-
-}
-
-/**************************************************************************************************/
-__global__ void filter_x( int width, int height, float p, unsigned char *src, unsigned char *dest ) {
-
-	int i = threadIdx.x + blockIdx.x*blockDim.x;
-	int j = threadIdx.y + blockIdx.y*blockDim.y;
-
-	int aux, idx;
-
-	if( i > 0 && i < width-1 && j < height ) {
-		for (int k = 0; k < 3; ++k)
-		{
-			aux = 0;
-
 			idx = 3*ELEM( i-1, j, width );
-			aux-= p*src[ idx+k ];
+			aux+= 2*src[ idx+k ];
+
+			idx = 3*ELEM( i, j-1, width );
+			aux+= 2*src[ idx+k ];
 
 			idx = 3*ELEM( i+1, j, width );
-			aux+= p*src[ idx+k ];
+			aux+= 2*src[ idx+k ];
 
-			dest[ idx+k ] = (unsigned char)abs(aux);
+			idx = 3*ELEM( i, j+1, width );
+			aux+= 2*src[ idx+k ];
+
+			aux /= 12;
+
+			idx = 3*ELEM( i, j, width );
+			dest[ idx+k ] = (unsigned char)aux;
+
 		}
 
-
 	}
-
 }
 
 /**************************************************************************************************/
-__global__ void filter_y( int width, int height, float p, unsigned char *src, unsigned char *dest ) {
+__global__ void filter2( int width, int height, unsigned char *src, unsigned char *dest ) {
 
-        int i = threadIdx.x + blockIdx.x*blockDim.x;
-        int j = threadIdx.y + blockIdx.y*blockDim.y;
+		int i = threadIdx.x + blockIdx.x*blockDim.x;
+		int j = threadIdx.y + blockIdx.y*blockDim.y;
 
-        int aux, idx;
+		int aux, idx;
 
-        if( i < width && j < height-1 && j > 0) {
-                for (int k = 0; k < 3; ++k)
-                {
-                        aux = 0;
-                        idx = 3*ELEM( i, j-1, width );
-                        aux-= p*src[ idx+k ];
+		__shared__ int pesos[3][3];
 
-                        idx = 3*ELEM( i, j+1, width );
-                        aux+= p*src[ idx+k ];
-
-
-                        dest[ idx+k ] = (unsigned char)abs(aux);
-                }
-
-
-        }
-
-}
-
-/**************************************************************************************************/
-__global__ void filter_x_y( int width, int height, float p, unsigned char *src, unsigned char *dest ) {
-
-	int i = threadIdx.x + blockIdx.x*blockDim.x;
-	int j = threadIdx.y + blockIdx.y*blockDim.y;
-
-	int aux_x, aux_y, idx;
-
-	if( i > 0 && i < width-1 && j < height-1 && j > 0) {
-		aux_x = 0;
-		aux_y = 0;
-
-		idx = 3*ELEM( i, j-1, width );
-		aux_y-= p*src[ idx+0 ];
-		idx = 3*ELEM( i, j+1, width );
-		aux_y+= p*src[ idx+0 ];
-
-        idx = 3*ELEM( i-1, j, width );
-		aux_x-= p*src[ idx+0 ];
-        idx = 3*ELEM( i+1, j, width );
-        aux_x+= p*src[ idx+0 ];
-
-		idx = 3*ELEM( i, j, width );
-		dest[ idx+0 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-		aux_x = 0;
-		aux_y = 0;
-
-		idx = 3*ELEM( i, j-1, width );
-		aux_y-= p*src[ idx+1 ];
-		idx = 3*ELEM( i, j+1, width );
-		aux_y+= p*src[ idx+1 ];
-
-        idx = 3*ELEM( i-1, j, width );
-		aux_x-= p*src[ idx+1 ];
-        idx = 3*ELEM( i+1, j, width );
-        aux_x+= p*src[ idx+1 ];
-
-		idx = 3*ELEM( i, j, width );
-		dest[ idx+1 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
+		// Setando Pesos
+		pesos[0][0] = 0; pesos[0][1] = 2; pesos[0][2] = 0;
+		pesos[1][0] = 2; pesos[1][1] = 4; pesos[1][2] = 2;
+		pesos[2][0] = 0; pesos[2][1] = 2; pesos[2][2] = 0;
 
 
 
-		aux_x = 0;
-		aux_y = 0;
+		if(i > 0 && j > 0 && i < width - 1 && j < height - 1) {
+			for (int k = 0; k < 3; ++k)
+			{
 
-		idx = 3*ELEM( i, j-1, width );
-		aux_y-= p*src[ idx+2 ];
-		idx = 3*ELEM( i, j+1, width );
-		aux_y+= p*src[ idx+2 ];
+				aux = 0;
+				for (int lin = 0; lin < 3; lin++)
+				{
+					for (int col = 0; col < 3; col++){
+						idx = 3*ELEM( i + lin - 1, j + col - 1, width );
+						aux += pesos[lin][col]*src[ idx+k ];
+					}
+				}
+				aux /= 12;
+				idx = 3*ELEM( i, j , width );
+				dest[ idx+k ] = (unsigned char)aux;
 
-        idx = 3*ELEM( i-1, j, width );
-		aux_x-= p*src[ idx+2 ];
-        idx = 3*ELEM( i+1, j, width );
-        aux_x+= p*src[ idx+2 ];
+			}
 
-		idx = 3*ELEM( i, j, width );
-		dest[ idx+2 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-	}
-
-
-}
-
-/**************************************************************************************************/
-__global__ void filter_x_y_sm( int width, int height, float p, unsigned char *src, unsigned char *dest ) {
-	__shared__ float r[BLOCK_SIZE+2][BLOCK_SIZE+2], g[BLOCK_SIZE+2][BLOCK_SIZE+2], b[BLOCK_SIZE+2][BLOCK_SIZE+2];
-	int idx;
-	int i = threadIdx.x + blockIdx.x*blockDim.x;
-	int j = threadIdx.y + blockIdx.y*blockDim.y;
-	float aux_x, aux_y;
-	//Copia dos valores para o tile
-
-	if(i < width && j < height){
-		idx = 3*ELEM(i,j,width);
-		r[threadIdx.x+1][threadIdx.y+1] = src[idx+2];
-		g[threadIdx.x+1][threadIdx.y+1] = src[idx+1];
-		b[threadIdx.x+1][threadIdx.y+1] = src[idx+0];
-
-
-		if(blockIdx.y > 0 && threadIdx.y == 0){
-			idx = 3*ELEM(i,j-1,width);
-			r[threadIdx.x+1][threadIdx.y] = src[idx+2];
-			g[threadIdx.x+1][threadIdx.y] = src[idx+1];
-			b[threadIdx.x+1][threadIdx.y] = src[idx+0];
-		}
-
-		if(blockIdx.y < gridDim.y - 1 && threadIdx.y == blockDim.y-1){
-			idx = 3*ELEM(i,j+1,width);
-			r[threadIdx.x+1][threadIdx.y+2] = src[idx+2];
-			g[threadIdx.x+1][threadIdx.y+2] = src[idx+1];
-			b[threadIdx.x+1][threadIdx.y+2] = src[idx+0];
-		}
-
-		if(blockIdx.x > 0 && threadIdx.x == 0){
-			idx = 3*ELEM(i-1,j,width);
-			r[threadIdx.x][threadIdx.y+1] = src[idx+2];
-			g[threadIdx.x][threadIdx.y+1] = src[idx+1];
-			b[threadIdx.x][threadIdx.y+1] = src[idx+0];
-		}
-
-		if(blockIdx.x < gridDim.x - 1 && threadIdx.x == blockDim.x-1){
-			idx = 3*ELEM(i+1,j,width);
-			r[threadIdx.x+2][threadIdx.y+1] = src[idx+2];
-			g[threadIdx.x+2][threadIdx.y+1] = src[idx+1];
-			b[threadIdx.x+2][threadIdx.y+1] = src[idx+0];
 		}
 	}
-	__syncthreads();
-
-	if( i > 0 && i < width-1 && j < height-1 && j > 0){
-		idx = 3*ELEM(i,j,width);
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*b[threadIdx.x+1][threadIdx.y+0];
-		aux_y+= p*b[threadIdx.x+1][threadIdx.y+2];
-
-		aux_x-= p*b[threadIdx.x+0][threadIdx.y+1];
-		aux_x+= p*b[threadIdx.x+2][threadIdx.y+1];
-
-		dest[ idx+0 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*g[threadIdx.x+1][threadIdx.y+0];
-		aux_y+= p*g[threadIdx.x+1][threadIdx.y+2];
-
-		aux_x-= p*g[threadIdx.x+0][threadIdx.y+1];
-		aux_x+= p*g[threadIdx.x+2][threadIdx.y+1];
-
-		dest[ idx+1 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*r[threadIdx.x+1][threadIdx.y+0];
-		aux_y+= p*r[threadIdx.x+1][threadIdx.y+2];
-
-		aux_x-= p*r[threadIdx.x+0][threadIdx.y+1];
-		aux_x+= p*r[threadIdx.x+2][threadIdx.y+1];
-
-		dest[ idx+2 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-	}
-
-
-}
-
-/**************************************************************************************************/
-__global__ void filter_x_y_sm( int width, int height, float p, unsigned char *src, unsigned char *dest , int threshold) {
-	__shared__ float r[BLOCK_SIZE+2][BLOCK_SIZE+2], g[BLOCK_SIZE+2][BLOCK_SIZE+2], b[BLOCK_SIZE+2][BLOCK_SIZE+2];
-	int idx;
-	int i = threadIdx.x + blockIdx.x*blockDim.x;
-	int j = threadIdx.y + blockIdx.y*blockDim.y;
-	float aux_x, aux_y;
-	//Copia dos valores para o tile
-
-	if(i < width && j < height){
-		idx = 3*ELEM(i,j,width);
-		r[threadIdx.x+1][threadIdx.y+1] = src[idx+2];
-		g[threadIdx.x+1][threadIdx.y+1] = src[idx+1];
-		b[threadIdx.x+1][threadIdx.y+1] = src[idx+0];
-
-
-		if(blockIdx.y > 0 && threadIdx.y == 0){
-			idx = 3*ELEM(i,j-1,width);
-			r[threadIdx.x+1][threadIdx.y] = src[idx+2];
-			g[threadIdx.x+1][threadIdx.y] = src[idx+1];
-			b[threadIdx.x+1][threadIdx.y] = src[idx+0];
-		}
-
-		if(blockIdx.y < gridDim.y - 1 && threadIdx.y == blockDim.y-1){
-			idx = 3*ELEM(i,j+1,width);
-			r[threadIdx.x+1][threadIdx.y+2] = src[idx+2];
-			g[threadIdx.x+1][threadIdx.y+2] = src[idx+1];
-			b[threadIdx.x+1][threadIdx.y+2] = src[idx+0];
-		}
-
-		if(blockIdx.x > 0 && threadIdx.x == 0){
-			idx = 3*ELEM(i-1,j,width);
-			r[threadIdx.x][threadIdx.y+1] = src[idx+2];
-			g[threadIdx.x][threadIdx.y+1] = src[idx+1];
-			b[threadIdx.x][threadIdx.y+1] = src[idx+0];
-		}
-
-		if(blockIdx.x < gridDim.x - 1 && threadIdx.x == blockDim.x-1){
-			idx = 3*ELEM(i+1,j,width);
-			r[threadIdx.x+2][threadIdx.y+1] = src[idx+2];
-			g[threadIdx.x+2][threadIdx.y+1] = src[idx+1];
-			b[threadIdx.x+2][threadIdx.y+1] = src[idx+0];
-		}
-	}
-	__syncthreads();
-
-	if( i > 0 && i < width-1 && j < height-1 && j > 0){
-		idx = 3*ELEM(i,j,width);
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*b[threadIdx.x+1][threadIdx.y+0];
-		aux_y+= p*b[threadIdx.x+1][threadIdx.y+2];
-
-		aux_x-= p*b[threadIdx.x+0][threadIdx.y+1];
-		aux_x+= p*b[threadIdx.x+2][threadIdx.y+1];
-
-		dest[ idx+0 ] = ((unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y) >= threshold)*255;
-
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*g[threadIdx.x+1][threadIdx.y+0];
-		aux_y+= p*g[threadIdx.x+1][threadIdx.y+2];
-
-		aux_x-= p*g[threadIdx.x+0][threadIdx.y+1];
-		aux_x+= p*g[threadIdx.x+2][threadIdx.y+1];
-
-		dest[ idx+1 ] = ((unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y) >= threshold)*255;
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*r[threadIdx.x+1][threadIdx.y+0];
-		aux_y+= p*r[threadIdx.x+1][threadIdx.y+2];
-
-		aux_x-= p*r[threadIdx.x+0][threadIdx.y+1];
-		aux_x+= p*r[threadIdx.x+2][threadIdx.y+1];
-
-		dest[ idx+2 ] = ((unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y) >= threshold)*255;
-
-	}
-
-
-}
-
-/**************************************************************************************************/
-__global__ void filter_x_y_sm_2( int width, int height, float p, unsigned char *src, unsigned char *dest ) {
-	__shared__ float r[BLOCK_SIZE][BLOCK_SIZE];
-	__shared__ float g[BLOCK_SIZE][BLOCK_SIZE];
-	__shared__ float b[BLOCK_SIZE][BLOCK_SIZE];
-	int idx;
-
-	int i = threadIdx.x + blockIdx.x*(blockDim.x-2);
-	int j = threadIdx.y + blockIdx.y*(blockDim.y-2);
-	float aux_x, aux_y;
-	//Copia dos valores para o tile
-	idx = 3*ELEM(i,j,width);
-
-	if(i < width && j < height){
-
-		r[threadIdx.x][threadIdx.y] = src[idx+2];
-		g[threadIdx.x][threadIdx.y] = src[idx+1];
-		b[threadIdx.x][threadIdx.y] = src[idx+0];
-	}
-	__syncthreads();
-
-	if( threadIdx.x > 0 && threadIdx.x < blockDim.x-1 && threadIdx.y < blockDim.y-1 && threadIdx.y > 0){
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*b[threadIdx.x][threadIdx.y-1];
-		aux_y+= p*b[threadIdx.x][threadIdx.y+1];
-
-		aux_x-= p*b[threadIdx.x-1][threadIdx.y];
-		aux_x+= p*b[threadIdx.x+1][threadIdx.y];
-
-		dest[ idx+0 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*g[threadIdx.x][threadIdx.y-1];
-		aux_y+= p*g[threadIdx.x][threadIdx.y+1];
-
-		aux_x-= p*g[threadIdx.x-1][threadIdx.y];
-		aux_x+= p*g[threadIdx.x+1][threadIdx.y];
-
-		dest[ idx+1 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-		aux_x = 0;
-		aux_y = 0;
-
-		aux_y-= p*r[threadIdx.x][threadIdx.y-1];
-		aux_y+= p*r[threadIdx.x][threadIdx.y+1];
-
-		aux_x-= p*r[threadIdx.x-1][threadIdx.y];
-		aux_x+= p*r[threadIdx.x+1][threadIdx.y];
-
-		dest[ idx+2 ] = (unsigned char)sqrt((float)aux_x*aux_x+aux_y*aux_y);
-
-	}
-
-
-}
-
-/**************************************************************************************************/
-__global__ void tom_cinza( int width, int height,  unsigned char *src, unsigned char *dest ) {
-
-	int i = threadIdx.x + blockIdx.x*blockDim.x;
-    int j = threadIdx.y + blockIdx.y*blockDim.y;
-
-    int cinza, idx;
-	int r,g,b;
-
-	if(i < width && j < height){
-		idx = 3*ELEM( i, j, width );
-		r = src[idx+2];
-		g = src[idx+1];
-		b = src[idx];
-		cinza  = (30*r + 59*g + 11*b)/100;
-		for (int k = 0; k < 3; ++k)
-                {
-                       dest[idx+k] = (unsigned char) cinza;
-                }
-
-	}
-
-
-}
 
 /**************************************************************************************************/
 __host__ int main( int argc, char *argv[] ) {
 
-	double start_time, gpu_time;
+	float gpu_time;
 	int    h_width, h_height;
 	unsigned char*  h_image = NULL, *h_res = NULL;
+
+	cudaEvent_t startCuda, stopCuda;
+
 
 	if( argc != 2 ) {
 
@@ -547,7 +207,6 @@ __host__ int main( int argc, char *argv[] ) {
 
 	readPPM( argv[1], &h_image, &h_width, &h_height );
 
-
 	int size = 3*h_width*h_height*sizeof( unsigned char );
 
 	// Buffer for result image
@@ -572,135 +231,38 @@ __host__ int main( int argc, char *argv[] ) {
 	cout << "Blocks (" << blockSize.x << "," << blockSize.y << ")\n";
 	cout << "Grid   (" << gridSize.x << "," << gridSize.y << ")\n";
 
-	//Filtro em x
-
-	start_time = get_clock_msec();
-    filter_x<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x: %f\n", gpu_time);
-    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_x.ppm", h_res, h_width, h_height );
-
-
-    //Filtro em y
-	start_time = get_clock_msec();
-    filter_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro y: %f\n", gpu_time);
-    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_y.ppm", h_res, h_width, h_height );
-
-    cudaEvent_t startCuda, stopCuda; float ms;
 	cudaEventCreate(&startCuda); cudaEventCreate(&stopCuda);
 
-    //Filtro em x e y
-	start_time = get_clock_msec();
+	cudaThreadSynchronize();
 	cudaEventRecord(startCuda, 0);
-    filter_x_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
+    filter1<<< gridSize, blockSize >>>( h_width, h_height, d_image, d_res );
+	cudaThreadSynchronize();
     cudaEventRecord(stopCuda);
     cudaEventSynchronize(stopCuda);
-    cudaEventElapsedTime(&ms, startCuda, stopCuda);
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x e y: %f\t%f\n", gpu_time, ms);
-	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_x_y.ppm", h_res, h_width, h_height );
+	cudaEventElapsedTime(&gpu_time, startCuda, stopCuda);
 
-	printf("---------------------------------------------------------\n");
-	printf("Filtro para imagem tom de cinza\n");
-	printf("---------------------------------------------------------\n");
-
-	start_time = get_clock_msec();
-	tom_cinza<<< gridSize, blockSize >>>( h_width, h_height, d_image, d_res_cinza );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-
-	printf("Tempo tom cinza: %f\n", gpu_time);
-
-	cudaMemcpy( h_res, d_res_cinza, size, cudaMemcpyDeviceToHost );
-	savePPM( (char *)"cinza.ppm", h_res, h_width, h_height );
-
-	//Copia imagem cinza para d_image
-	cudaMemcpy( d_image, d_res_cinza, size, cudaMemcpyDeviceToDevice );
-
-
-	//Filtro em x
-
-	start_time = get_clock_msec();
-    filter_x<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x: %f\n", gpu_time);
+	printf("\tTempo filtro: %f ms\n", gpu_time);
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_cinza_x.ppm", h_res, h_width, h_height );
+    savePPM( (char *)"filtro_blur.ppm", h_res, h_width, h_height );
 
 
-    //Filtro em y
-	start_time = get_clock_msec();
-    filter_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0, d_image, d_res );
 	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro y: %f\n", gpu_time);
+	cudaEventRecord(startCuda, 0);
+    filter2<<< gridSize, blockSize >>>( h_width, h_height, d_image, d_res );
+	cudaThreadSynchronize();
+    cudaEventRecord(stopCuda);
+    cudaEventSynchronize(stopCuda);
+	cudaEventElapsedTime(&gpu_time, startCuda, stopCuda);
+
+	printf("\tTempo filtro: %f ms\n", gpu_time);
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_cinza_y.ppm", h_res, h_width, h_height );
-
-
-    //Filtro em x e y
-	start_time = get_clock_msec();
-    filter_x_y<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x e y: %f\n", gpu_time);
-	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_cinza_x_y.ppm", h_res, h_width, h_height );
-
-
-    //Filtro em x e y
-	start_time = get_clock_msec();
-    filter_x_y_sm<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x e y sm: %f\n", gpu_time);
-	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_cinza_x_y_sm.ppm", h_res, h_width, h_height );
-
-
-//	char name[100];
-//	for(int threshold = 1; threshold < 255; threshold+= 20){
-//		filter_x_y_sm<<< gridSize, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res , threshold);
-//		cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-//		sprintf(name, "filtro_cinza_x_y_sm_%d.ppm", threshold);
-//    	savePPM( name, h_res, h_width, h_height );
-//	}
-
-	numBlocosX = (h_width-2) / (blockSize.x-2) + ( (h_width-2)  % (blockSize.x-2) == 0 ? 0 : 1 );
-	numBlocosY = (h_height-2) / (blockSize.y-2) + ( (h_height-2)  % (blockSize.y-2) == 0 ? 0 : 1 );
-	dim3 gridSize2(numBlocosX, numBlocosY, 1);
-
-	cout << "Blocks (" << blockSize.x << "," << blockSize.y << ")\n";
-	cout << "Grid   (" << gridSize2.x << "," << gridSize2.y << ")\n";
-
-	cudaThreadSynchronize();
-	start_time = get_clock_msec();
-    	filter_x_y_sm_2<<< gridSize2, blockSize >>>( h_width, h_height, 1.0,  d_image, d_res );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
-	printf("\tTempo filtro x e y sm 2: %f\n", gpu_time);
-	cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
-    savePPM( (char *)"filtro_cinza_x_y_sm_2.ppm", h_res, h_width, h_height );
-
-
+    savePPM( (char *)"filtro_blur_2.ppm", h_res, h_width, h_height );
 
 	// Free buffers
 	cudaFree( d_image );
 	cudaFree( d_res   );
 	free( h_image );
 	free( h_res );
-
-	//system( "eog template.ppm" );
-
 	return 0;
 
 }
