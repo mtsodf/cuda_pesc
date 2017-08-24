@@ -1,0 +1,14 @@
+imageFilters/filtro_cinza_x.ppm
+imageFilters/filtro_cinza_x_y_sm.ppm
+imageFilters/filtro_cinza_x_y_sm_2.ppm
+imageFilters/filtro_cinza_x_y.ppm
+imageFilters/filtro_cinza_x.ppm
+imageFilters/filtro_cinza_y.ppm
+imageFilters/filtro_x_y.ppm
+imageFilters/filtro_x.ppm
+imageFilters/filtro_y.ppm
+bin/*
+imageFilters/cinza.ppm
+*.o
+mergeImage/*.o
+MatMul/bin/*
