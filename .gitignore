@@ -12,3 +12,6 @@ imageFilters/cinza.ppm
 *.o
 mergeImage/*.o
 MatMul/bin/*
+exercicioFiltro/filtro_blur.ppm
+exercicioFiltro/filtro_blur_2.ppm
+mergeImage/rf-time.o
