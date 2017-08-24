@@ -1,7 +1,7 @@
 #include <cuda_runtime.h>
 #define DIM(i, j, N) (i)+(j)*(N)
 
-#define TILE_SIZE 16
+#define TILE_SIZE 32
 
 
 
@@ -143,16 +143,20 @@ matTrans(float *A, int N)
 
 
 void matMult(const float *A, const float *B, float *C, int N){
-	for (int i = 0; i < N; ++i)
+	float aux;
+	int i,j;
+	for (j = 0; j < N; ++j)
 	{
-		for (int j = 0; j < N; ++j)
+		for (i = 0; i < N; ++i)
 		{	
-			C[DIM(i,j,N)] = 0.0;
+			aux = 0.0;	
 			for (int k = 0; k < N; ++k)
 			{
-				C[DIM(i,j,N)] += A[DIM(i,k,N)]*B[DIM(k,j,N)];
+				aux += A[DIM(i,k,N)]*B[DIM(k,j,N)];
 			}
+			C[DIM(i,j,N)] = aux;
 		}
+		
 	}
 }
 
