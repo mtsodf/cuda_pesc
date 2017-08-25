@@ -77,9 +77,6 @@ __host__ void readPPM( char *fname, unsigned char **buffer, int *width, int *hei
 
 	int size = 3*(*width)*(*height)*sizeof( unsigned char );
 	cout << "Image dimension: (" << *width << "," << *height <<")\n";
-//    cudaEventRecord(stopCuda);
-//    cudaEventSynchronize(stopCuda);
-//    cudaEventElapsedTime(&ms, startCuda, stopCuda);
 	if( ( *buffer = (unsigned char *)malloc( size ) ) == NULL )
 		erro( "Error allocating image" );
 
