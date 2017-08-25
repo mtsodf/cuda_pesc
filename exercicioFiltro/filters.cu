@@ -168,6 +168,46 @@ __global__ void filter2( int width, int height, unsigned char *src, unsigned cha
 	}
 
 /**************************************************************************************************/
+__global__ void filter3( int width, int height, unsigned char *src, unsigned char *dest ) {
+	
+			int i = threadIdx.x + blockIdx.x*blockDim.x;
+			int j = threadIdx.y + blockIdx.y*blockDim.y;
+	
+			int r, g, b, idx;
+	
+			__shared__ int pesos[3][3];
+	
+			// Setando Pesos
+			pesos[0][0] = 0; pesos[0][1] = 2; pesos[0][2] = 0;
+			pesos[1][0] = 2; pesos[1][1] = 4; pesos[1][2] = 2;
+			pesos[2][0] = 0; pesos[2][1] = 2; pesos[2][2] = 0;
+	
+	
+	
+			if(i > 0 && j > 0 && i < width - 1 && j < height - 1) {
+				
+					r = g = b = 0;
+					for (int lin = 0; lin < 3; lin++)
+					{
+						for (int col = 0; col < 3; col++){
+							idx = 3*ELEM( i + lin - 1, j + col - 1, width );
+							b += pesos[lin][col]*src[ idx+0 ];
+							g += pesos[lin][col]*src[ idx+1 ];
+							r += pesos[lin][col]*src[ idx+2 ];
+						}
+					}
+					aux /= 12;
+					idx = 3*ELEM( i, j , width );
+					dest[ idx+0 ] = (unsigned char)b;
+					dest[ idx+1 ] = (unsigned char)g;
+					dest[ idx+2 ] = (unsigned char)r;
+	
+				
+	
+			}
+		}
+
+/**************************************************************************************************/
 __host__ int main( int argc, char *argv[] ) {
 
 	float gpu_time;
@@ -254,6 +294,18 @@ __host__ int main( int argc, char *argv[] ) {
 	printf("\tTempo filtro: %f ms\n", gpu_time);
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_blur_2.ppm", h_res, h_width, h_height );
+
+	cudaThreadSynchronize();
+	cudaEventRecord(startCuda, 0);
+    filter3<<< gridSize, blockSize >>>( h_width, h_height, d_image, d_res );
+	cudaThreadSynchronize();
+    cudaEventRecord(stopCuda);
+    cudaEventSynchronize(stopCuda);
+	cudaEventElapsedTime(&gpu_time, startCuda, stopCuda);
+
+	printf("\tTempo filtro: %f ms\n", gpu_time);
+    cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
+    savePPM( (char *)"filtro_blur_3.ppm", h_res, h_width, h_height );
 
 	// Free buffers
 	cudaFree( d_image );
