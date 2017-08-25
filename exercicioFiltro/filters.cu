@@ -278,7 +278,7 @@ __host__ int main( int argc, char *argv[] ) {
     cudaEventSynchronize(stopCuda);
 	cudaEventElapsedTime(&gpu_time, startCuda, stopCuda);
 
-	printf("\tTempo filtro: %f ms\n", gpu_time);
+	printf("\tTempo filtro normal: %f ms\n", gpu_time);
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_blur.ppm", h_res, h_width, h_height );
 
@@ -291,7 +291,7 @@ __host__ int main( int argc, char *argv[] ) {
     cudaEventSynchronize(stopCuda);
 	cudaEventElapsedTime(&gpu_time, startCuda, stopCuda);
 
-	printf("\tTempo filtro: %f ms\n", gpu_time);
+	printf("\tTempo filtro shared: %f ms\n", gpu_time);
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_blur_2.ppm", h_res, h_width, h_height );
 
@@ -303,7 +303,7 @@ __host__ int main( int argc, char *argv[] ) {
     cudaEventSynchronize(stopCuda);
 	cudaEventElapsedTime(&gpu_time, startCuda, stopCuda);
 
-	printf("\tTempo filtro: %f ms\n", gpu_time);
+	printf("\tTempo filtro shared sem loop canais: %f ms\n", gpu_time);
     cudaMemcpy( h_res, d_res, size, cudaMemcpyDeviceToHost );
     savePPM( (char *)"filtro_blur_3.ppm", h_res, h_width, h_height );
 
