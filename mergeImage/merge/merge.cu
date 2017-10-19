@@ -154,23 +154,22 @@ __host__ int main( int argc, char *argv[] ) {
 		
 	}
 
-
   cudaSetDevice(1);
-
 
 	cout << "Programa para Merge duas Imagens PPM " << endl;
 
+  int divisoes = 2;
 	switch( argc ) {
-
+  
 	case 4:
-		blSizeX = blSizeY = atoi( argv[ 3 ] );
-		break;
+    divisoes  = atoi( argv[ 3 ] ) ; 
+    break;
 	case 5:
 		blSizeX = atoi( argv[ 3 ] );
 		blSizeY = atoi( argv[ 4 ] );
 	}
  
-  int STREAM_SIZE = 351232;
+
 
 	lerPPM( argv[1], &h_imagem1, &h_width1, &h_height1 );
 	lerPPM( argv[2], &h_imagem2, &h_width2, &h_height2 );
@@ -186,11 +185,11 @@ __host__ int main( int argc, char *argv[] ) {
 	// Aloca memória no device e copia vetorA e vetorB para lá
 	unsigned char *d_imagem1 = NULL;
 	cudaMalloc( (void**)&d_imagem1, size );
-	cudaMemcpy( d_imagem1, h_imagem1, size, cudaMemcpyHostToDevice );
+	
 
 	unsigned char *d_imagem2 = NULL;
 	cudaMalloc( (void**)&d_imagem2, size );
-	cudaMemcpy( d_imagem2, h_imagem2, size, cudaMemcpyHostToDevice );
+	
 
 	unsigned char *d_res = NULL;
 	cudaMalloc( (void**)&d_res, size );
@@ -198,6 +197,7 @@ __host__ int main( int argc, char *argv[] ) {
 	// Calcula dimensoes da grid e dos blocos
 	dim3 blockSize( blSizeX);
 	int pixels = h_width1*h_height1;
+  int STREAM_SIZE = pixels/divisoes;
   printf("Quantidade de Pixels %d\n", pixels);
 	int numBlocosX = pixels  / blockSize.x + ( pixels  % blockSize.x == 0 ? 0 : 1 );
 	dim3 gridSize( numBlocosX, 1, 1 );
@@ -205,20 +205,33 @@ __host__ int main( int argc, char *argv[] ) {
 	cout << "Blocks (" << blockSize.x << ")\n";
 	cout << "Grid   (" << gridSize.x << "," << gridSize.y << ")\n";
 
-	// Chama SomarVetoresGPU
-	start_time = get_clock_msec();
-	mergeGPU1d<<< gridSize, blockSize >>>( d_imagem1, d_imagem2, d_res, pixels );
-	cudaThreadSynchronize();
-	gpu_time = get_clock_msec() - start_time;
 
-	// Copia o resultado de volta para o host
-	cudaMemcpy( h_imagem_resultado, d_res, size, cudaMemcpyDeviceToHost );
+	cudaEvent_t     start, stop;
+	float           elapsedTime;
+     
+  // start the timers
+	cudaEventCreate( &start );
+	cudaEventCreate( &stop );
+
+	// Chama SomarVetoresGPU
+	cudaEventRecord( start, 0 );
+  cudaMemcpy( d_imagem1, h_imagem1, size, cudaMemcpyHostToDevice );
+  cudaMemcpy( d_imagem2, h_imagem2, size, cudaMemcpyHostToDevice );
+	mergeGPU1d<<< gridSize, blockSize >>>( d_imagem1, d_imagem2, d_res, pixels );
+  cudaMemcpy( h_imagem_resultado, d_res, size, cudaMemcpyDeviceToHost );
+	cudaThreadSynchronize();
+  
+	cudaEventRecord( stop, 0 );
+	cudaEventSynchronize( stop );
+  cudaEventElapsedTime( &elapsedTime, start, stop );
+
+	
 
 	// Salva imagem resultado
 	salvaPPM( "merge.ppm", h_imagem_resultado, h_width1, h_height1 );
 	
 	// Imprime tempo
-	cout << "\tTempo de execucao da GPU: " << gpu_time << "ms" << endl;
+	printf( "Tempo de Execucao sem Stream:  %8.4f ms\n", elapsedTime);
 	cout << "-------------------------------------------" << endl;
 
 	//system( "eog merge.ppm" );	
@@ -253,7 +266,6 @@ __host__ int main( int argc, char *argv[] ) {
 	cudaMalloc( (void**)&d_res1, STREAM_SIZE*3*sizeof( char ));
   cudaMalloc( (void**)&d_res2, STREAM_SIZE*3*sizeof( char ));
 
-  printf("Esta aqui %d. Size char %d\n", __LINE__, sizeof(char));
 
 	for(int i = 0; i < size; i++){
 
@@ -261,8 +273,6 @@ __host__ int main( int argc, char *argv[] ) {
 		h_imagem2_pin[i] = h_imagem2[i];
 
 	}
-
-	printf("Esta aqui %d\n", __LINE__);
 
 /*	
   cudaMemcpyAsync( d_imagem1, h_imagem1_pin, 3*STREAM_SIZE * sizeof(char), cudaMemcpyHostToDevice, stream0 );
@@ -277,12 +287,7 @@ __host__ int main( int argc, char *argv[] ) {
   cudaMemcpyAsync( h_imagem_resultado+3*STREAM_SIZE, d_res2, 3*STREAM_SIZE * sizeof(char), cudaMemcpyDeviceToHost, stream0 );
 */
  
-	cudaEvent_t     start, stop;
-	float           elapsedTime;
-     
-  // start the timers
-	cudaEventCreate( &start );
-	cudaEventCreate( &stop );
+
   
 	cudaEventRecord( start, 0 );
  
@@ -295,12 +300,11 @@ __host__ int main( int argc, char *argv[] ) {
 
 
 	
-  printf("Esta aqui %d\n", __LINE__);
 	cudaStreamSynchronize( stream0 );
 	cudaEventRecord( stop, 0 );
 	cudaEventSynchronize( stop );
 	cudaEventElapsedTime( &elapsedTime, start, stop );
-	printf( "Time taken:  %3.1f ms\n", elapsedTime);
+	printf( "Tempo de Execucao com Stream:  %8.4f ms\n", elapsedTime);
  
   salvaPPM( "merge_stream.ppm", h_imagem_resultado, h_width1, h_height1 );
 
