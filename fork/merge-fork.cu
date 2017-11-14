@@ -131,6 +131,17 @@ int main( int argc, char *argv[] ) {
 	int    h_width, h_height;	
  	int h_a = 0;
 	int deviceCount = 0;
+  
+  
+  
+  // Variaveis para fazer o pipe
+  int     fdParaFilho[2];	
+  char    readbuffer[80];
+  char    stringPai[] = "Mensagem!\n";
+  
+  
+  
+  
 	unsigned char*  h_image_1 = NULL, *h_image_2 = NULL, *h_res = NULL;
 	printf("Creating the son process\n");
 	
@@ -174,8 +185,13 @@ int main( int argc, char *argv[] ) {
 	if( ( h_res = (unsigned char *)malloc( 3*pixelsTotal ) ) == NULL )
 		erro( "Erro allocating result imagem buffer." );
 
+
+  //Cria o pipe para o filho
+  pipe(fdParaFilho); 
+
   printf("Realizando o fork.\n");
 	pid = fork();
+ 
 
 
 
@@ -185,6 +201,8 @@ int main( int argc, char *argv[] ) {
 		exit(-1); 
 		
 	} else if( pid == 0 ) { /* filho */
+     close(fdParaFilho[0]); //Fecha o pipe para envio para o pai
+
      cudaSetDevice(1);
      printf("Processo filho\n");
   
@@ -198,8 +216,14 @@ int main( int argc, char *argv[] ) {
      printf("Realizando o merge no filho.\n");
      mergeGPU1d<<< gridSize, blockSize >>>(d_image_1+offset, d_image_2+offset, d_res+offset, pixelsLocal);
      printf("Fim do merge no filho.\n");
+     
+     sleep(3);
+     write(fdParaFilho[1], stringPai, (strlen(stringPai)+1)); //Envia mensagem 
 
 	} else { /* pai */
+ 
+     close(fdParaFilho[1]); //Fecha o pipe para envio para o pai
+
      printf("Processo pai\n");
      
      int pixelsLocal = pixelsTotal/2;
@@ -215,11 +239,17 @@ int main( int argc, char *argv[] ) {
      printf("Realizando o merge no pai.\n");
      mergeGPU1d<<< gridSize, blockSize >>>(d_image_1+offset, d_image_2+offset, d_res+offset, pixelsLocal);
      printf("Fim do merge no pai.\n");
-     sleep(3);
-  	 // Copy result buffer back to cpu memory
+     
+     read(fdParaFilho[0], readbuffer, sizeof(readbuffer));
+     
+     
+  	 printf("Recebido: %s\n", readbuffer);
+     // Copy result buffer back to cpu memory
+     printf("Copiando imagem com merge para o host.\n");
   	 cudaMemcpy( h_res, d_res, 3*pixelsTotal, cudaMemcpyDeviceToHost );
      
   	 // Salva imagem resultado
+     printf("Salvando imagem.\n");
   	 savePPM( (char *)"template.ppm", h_res, h_width, h_height );     
 	}
 
