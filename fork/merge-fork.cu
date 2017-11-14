@@ -217,7 +217,6 @@ int main( int argc, char *argv[] ) {
      mergeGPU1d<<< gridSize, blockSize >>>(d_image_1+offset, d_image_2+offset, d_res+offset, pixelsLocal);
      printf("Fim do merge no filho.\n");
      
-     sleep(3);
      write(fdParaFilho[1], stringPai, (strlen(stringPai)+1)); //Envia mensagem 
 
 	} else { /* pai */
