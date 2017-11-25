@@ -4,10 +4,45 @@ import pycuda.autoinit
 from pycuda.compiler import SourceModule
 from scipy.sparse import csr_matrix, identity
 from time import time
+import pyamg
 
 f = open("Core.cpp")
 mod = SourceModule(f.read())
 
+
+
+def CopyMat2Gpu(A):
+
+    ia_gpu   = cuda.mem_alloc(A.indptr.nbytes)
+    ja_gpu   = cuda.mem_alloc(A.indices.nbytes)
+    data_gpu = cuda.mem_alloc(A.data.nbytes)
+
+
+    cuda.memcpy_htod(ia_gpu, A.indptr)
+    cuda.memcpy_htod(ja_gpu, A.indices)
+    cuda.memcpy_htod(data_gpu, A.data)
+
+    return ia_gpu, ja_gpu, data_gpu
+
+def CreateGpu(a):
+    a_gpu = cuda.mem_alloc(a.nbytes)
+    cuda.memcpy_htod(a_gpu, a)
+
+    return a_gpu
+
+def GaussSeidel(A, b, x0):
+    zero = np.int32(0)
+    one = np.int32(1)
+    n = np.int32(A.shape[0])
+
+    ia_gpu, ja_gpu, data_gpu = CopyMat2Gpu(A)
+    gs = mod.get_function("GaussSeidel")
+
+    b_gpu = CreateGpu(b)
+    x0_gpu = CreateGpu(x0)
+
+
+    gs(ia_gpu, ja_gpu, data_gpu, b_gpu, x0_gpu, zero, n)
 
 
 def MatVecSp(A, b):
@@ -54,23 +89,7 @@ def MatVecSp(A, b):
     return c, t2-t1
 
 
-def MatVec(A, b):
-
-    n = np.int32(b.size)
-
-
-    # Alocando memoria na gpu
-    ia_gpu = cuda.mem_alloc(A.indptr.nbytes)
-    ja_gpu = cuda.mem_alloc(A.indices.nbytes)
-    data_gpu = cuda.mem_alloc(A.data.nbytes)
-    b_gpu = cuda.mem_alloc(b.nbytes)
-    c_gpu = cuda.mem_alloc(b.nbytes)
-
-    cuda.memcpy_htod(ia_gpu, A.indptr)
-    cuda.memcpy_htod(ja_gpu, A.indices)
-    cuda.memcpy_htod(data_gpu, A.data)
-    cuda.memcpy_htod(b_gpu, b)
-
+def MatVecGpu(n, ia_gpu, ja_gpu, data_gpu, b_gpu, c_gpu):
 
     blocksize = 64
 
@@ -88,13 +107,35 @@ def MatVec(A, b):
     pycuda.driver.Context.synchronize()
     t2 = time()
 
+    return c_gpu, t2-t1
+
+
+def MatVec(A, b):
+
+    n = np.int32(b.size)
+
+    # Alocando memoria na gpu
+    b_gpu = CreateGpu(b)
+
+
+    ia_gpu, ja_gpu, data_gpu = CopyMat2Gpu(A)
+
+    c_gpu = cuda.mem_alloc(b.nbytes)
+    c_gpu, dt = MatVecGpu(n, ia_gpu, ja_gpu, data_gpu, b_gpu, c_gpu)
+
     c = np.empty_like(b)
     cuda.memcpy_dtoh(c, c_gpu)
-    return c, t2-t1
+    return c, dt
 
 n = np.int32(10000000)
 
 A = identity(n, format='csr')
+
+A = pyamg.gallery.poisson((200,200,100), dtype=np.float64, format='csr')
+
+n = np.int32(A.shape[0])
+
+print "Tamanho da Matriz", n
 
 b = np.ones(n)
 
@@ -110,7 +151,7 @@ print "Norma da Diferenca = ", np.linalg.norm(c1-d)
 print "Norma da Diferenca = ", np.linalg.norm(c2-d)
 
 
-print "Tempo Numpy SP = ", t4-t3, dt2
+print "Tempo Gpu SP = ", t4-t3, dt2
 
 print "Tempo Gpu DP = ", t2-t1, dt1
 
