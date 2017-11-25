@@ -5,49 +5,9 @@ from pycuda.compiler import SourceModule
 from scipy.sparse import csr_matrix, identity
 from time import time
 
-mod = SourceModule("""
-    __global__ void doublify(double *a)
-    {
-        int idx = threadIdx.x + threadIdx.y*4;
-        a[idx] *= 2;
-    }
+f = open("Core.cpp")
+mod = SourceModule(f.read())
 
-    __global__ void GaussSeidelRb(int *ia, int *ja, double *a, int n){
-        int idx = blockDim.x * blockIdx.x + threadIdx.x;
-    }
-
-    __global__ void MatVec(int *ia, int *ja, double *a, double *b, double *c, int n){
-        int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
-
-
-        if(idx < n){
-            double aux = 0.0;
-            for(int i=ia[idx]; i < ia[idx+1]; i++){
-                aux += a[i]*b[ja[i]];
-            }
-            c[idx] = aux;
-        }
-
-    }
-
-    __global__ void MatVecSp(int *ia, int *ja, float *a, float *b, float *c, int n){
-        int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
-
-
-        if(idx < n){
-            double aux = 0.0;
-            for(int i=ia[idx]; i < ia[idx+1]; i++){
-                aux += a[i]*b[ja[i]];
-            }
-            c[idx] = aux;
-        }
-
-    }
-
-  """
-  )
 
 
 def MatVecSp(A, b):
