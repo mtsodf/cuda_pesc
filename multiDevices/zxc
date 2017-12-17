@@ -1,0 +1,10 @@
+echo Compiling multiGPU examples
+echo nvcc -o multidevice multidevice.cu
+nvcc -o multidevice multidevice.cu
+echo nvcc -o portable    portable.cu
+nvcc -o portable    portable.cu
+echo nvcc -o time_zero2  time_zero2.cu
+nvcc -o time_zero2  time_zero2.cu
+echo nvcc -o portableTimed  portableTimed.cu
+nvcc -o portableTimed  portableTimed.cu
+echo Done.
