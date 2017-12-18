@@ -20,6 +20,8 @@
 
 #define BLOCK_SIZE 32
 
+using namespace std;
+
 
 /**************************************************************************************************/
 
@@ -128,7 +130,7 @@ void *routine( void *pvoidData ) {
 
 
 	int threadsPerBlock = BLOCK_SIZE;
-	int blocksPerGrid = qtdPixels/blocksPerGrid + qtdPixels%blocksPerGrid==0?0:1;
+	int blocksPerGrid = qtdPixels/BLOCK_SIZE + qtdPixels%BLOCK_SIZE==0?0:1;
 
 	cinzaGPU1d<<<blocksPerGrid,threadsPerBlock>>>( d_image, d_res, qtdPixels);
 
@@ -143,7 +145,7 @@ void *routine( void *pvoidData ) {
 
 
 
-int main( void ) {
+int main( int argc, char *argv[] ) {
 
 	int deviceCount;
 	cudaGetDeviceCount( &deviceCount );
@@ -155,7 +157,7 @@ int main( void ) {
 
 	cout << "Program for image treatment " << endl;
 
-	int h_image, h_width, h_height;
+	int h_width, h_height;
 	unsigned char*  h_image = NULL, *h_res = NULL;
 
 	readPPM( argv[1], &h_image, &h_width, &h_height );
@@ -172,6 +174,7 @@ int main( void ) {
 	DataStruct  data[2];
 	data[0].deviceID = 0;
 	data[0].init = 0;
+	data[0].qtdPixels = qtdPixels;
 	data[0].image = h_image;
 	data[0].out = h_res;
 
