@@ -94,9 +94,9 @@ __global__ void cinzaGPU1d( unsigned char *image1,
                 
                 cinza  = (30*r + 59*g + 11*b)/100;
 
-                res[ idx+2 ] = (unsigned char)cinza;
-                res[ idx+1 ] = (unsigned char)cinza;
-                res[ idx   ] = (unsigned char)cinza;
+                res[ idx+2 ] = (unsigned char)r;
+                res[ idx+1 ] = (unsigned char)0;
+                res[ idx   ] = (unsigned char)0;
 
          }
 }
@@ -105,7 +105,8 @@ __global__ void cinzaGPU1d( unsigned char *image1,
 struct DataStruct {
 	int     deviceID;
 	int     init;
-	int     qtdPixels;
+	int     height;
+	int     width;
 	unsigned char   *image;
 	unsigned char   *out;
 };
@@ -115,28 +116,32 @@ void *routine( void *pvoidData ) {
 
 	DataStruct  *data = (DataStruct*)pvoidData;
 	cudaSetDevice( data->deviceID );
+	int	qtdPixels = data->width*data->height;
+	int     size = 3*qtdPixels*sizeof(unsigned char);
+	unsigned char *d_image, *d_res;
+	
 
-	int     size = 3*data->qtdPixels*sizeof(unsigned char);
-	unsigned char   *d_image, *d_res;
-	int qtdPixels = data->qtdPixels;
+	printf("Quantidade de Pixels %d\n", qtdPixels);
+	printf("Size %d\n", size);
+	printf("Inicio do calculo %d\n", data->init);
 
 
 	// allocate the memory on the GPU
 	cudaMalloc( (void**)&d_image, size);
 	cudaMalloc( (void**)&d_res, size);
 
-	// copy the arrays 'h_a' and 'h_b' to the GPU
-	cudaMemcpy( d_image, data->image, size*sizeof(float), cudaMemcpyHostToDevice ); 
-
+	cudaMemcpy( d_image, data->image , size, cudaMemcpyHostToDevice );
 
 	int threadsPerBlock = BLOCK_SIZE;
-	int blocksPerGrid = qtdPixels/BLOCK_SIZE + qtdPixels%BLOCK_SIZE==0?0:1;
-
+	int blocksPerGrid = qtdPixels/BLOCK_SIZE + (qtdPixels%BLOCK_SIZE==0?0:1);
+	
+	printf("Quantidade de blocos %d. Quantidade de Threads %d.\n", blocksPerGrid, threadsPerBlock);
 	cinzaGPU1d<<<blocksPerGrid,threadsPerBlock>>>( d_image, d_res, qtdPixels);
 
 	// copy the array 'd_partial_c' back from the GPU to the CPU
-	cudaMemcpy( d_res, data->out+3*data->init, size, cudaMemcpyDeviceToHost );
+	cudaMemcpy( d_image, (data->out), size, cudaMemcpyDeviceToHost );
 
+	savePPM( (char *)"saida_func.ppm", data->out, data->width, data->height );	
 
 	cudaFree( d_image );
 	cudaFree( d_res );
@@ -175,7 +180,8 @@ int main( int argc, char *argv[] ) {
 	DataStruct  data[2];
 	data[0].deviceID = 0;
 	data[0].init = 0;
-	data[0].qtdPixels = qtdPixels;
+	data[0].height = h_height;
+	data[0].width = h_width;
 	data[0].image = h_image;
 	data[0].out = h_res;
 
@@ -186,7 +192,7 @@ int main( int argc, char *argv[] ) {
 	routine( &(data[0]) );
 
 
-	savePPM( (char *)"out.ppm", data.out, h_width, h_height );
+	savePPM( (char *)"out.ppm", h_res, h_width, h_height );
 
 	// free memory on the CPU side
 	free( h_image );
