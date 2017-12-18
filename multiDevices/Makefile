@@ -4,7 +4,7 @@
 #
 #-----------------------------------------------------------------------------
 
-all: 	time_zero2 multidevice portable portableTimed deleteObjs
+all: 	time_zero2 multidevice portable portableTimed deleteObjs multidevicegray
 
 time_zero2:	Makefile-time_zero2
 	make -f Makefile-time_zero2
@@ -17,6 +17,9 @@ portable:	Makefile-portable
 
 portableTimed:	Makefile-portableTimed
 	make -f Makefile-portableTimed
+
+multidevicegray:	Makefile-multidevicegray
+	make -f Makefile-multidevicegray
 
 deleteObjs:
 	rm *.o
