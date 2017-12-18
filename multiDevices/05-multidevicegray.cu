@@ -140,7 +140,8 @@ void *routine( void *pvoidData ) {
 
 	cudaFree( d_image );
 	cudaFree( d_res );
-
+	
+	return 0;
 }
 
 
