@@ -153,7 +153,7 @@ int main( int argc, char *argv[] ) {
 
 	int deviceCount;
 	cudaGetDeviceCount( &deviceCount );
-	deviceCount = 2;
+
 	if( deviceCount < 2 ) {
 		printf( "We need at least two compute 1.0 or greater "
 			"devices, but only found %d\n", deviceCount );
@@ -191,12 +191,11 @@ int main( int argc, char *argv[] ) {
 	data[1].image = h_image;
 	data[1].out = h_res;
 
-	//CUTThread   thread = start_thread( routine, &(data[0]) );
-	//routine( &(data[1]) );
-	//end_thread( thread );
+	CUTThread   thread = start_thread( routine, &(data[0]) );
+	routine( &(data[1]) );
+	end_thread( thread );
 
 	routine( &(data[0]) );
-	routine( &(data[1]) );
 
 	savePPM( (char *)"out.ppm", h_res, h_width, h_height );
 
