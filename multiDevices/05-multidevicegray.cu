@@ -7,7 +7,7 @@
  *   permitir a chamada de cada GPU. Perceba que a funcao "routine"
  *   chamada por cada thread perfaz a alocacao dos seus buffers
  *   na GPU.
- * 
+ *
  */
 
 #include <cuda.h>
@@ -91,12 +91,12 @@ __global__ void cinzaGPU1d( unsigned char *image1,
                 int r = image1[ idx+2 ];
                 int g = image1[ idx+1 ];
                 int b = image1[ idx   ];
-                
+
                 cinza  = (30*r + 59*g + 11*b)/100;
 
-                res[ idx+2 ] = (unsigned char)r;
-                res[ idx+1 ] = (unsigned char)0;
-                res[ idx   ] = (unsigned char)0;
+                res[ idx+2 ] = (unsigned char)cinza;
+                res[ idx+1 ] = (unsigned char)cinza;
+                res[ idx   ] = (unsigned char)cinza;
 
          }
 }
@@ -119,7 +119,7 @@ void *routine( void *pvoidData ) {
 	int	qtdPixels = data->width*data->height;
 	int     size = 3*qtdPixels*sizeof(unsigned char);
 	unsigned char *d_image, *d_res;
-	
+
 
 	printf("Quantidade de Pixels %d\n", qtdPixels);
 	printf("Size %d\n", size);
@@ -130,22 +130,20 @@ void *routine( void *pvoidData ) {
 	cudaMalloc( (void**)&d_image, size);
 	cudaMalloc( (void**)&d_res, size);
 
-	cudaMemcpy( d_image, data->image , size, cudaMemcpyHostToDevice );
+	cudaMemcpy( d_image, data->image + 3*(data->init), size, cudaMemcpyHostToDevice );
 
 	int threadsPerBlock = BLOCK_SIZE;
 	int blocksPerGrid = qtdPixels/BLOCK_SIZE + (qtdPixels%BLOCK_SIZE==0?0:1);
-	
+
 	printf("Quantidade de blocos %d. Quantidade de Threads %d.\n", blocksPerGrid, threadsPerBlock);
 	cinzaGPU1d<<<blocksPerGrid,threadsPerBlock>>>( d_image, d_res, qtdPixels);
 
 	// copy the array 'd_partial_c' back from the GPU to the CPU
-	cudaMemcpy( d_image, (data->out), size, cudaMemcpyDeviceToHost );
-
-	savePPM( (char *)"saida_func.ppm", data->out, data->width, data->height );	
+	cudaMemcpy( (data->out) + 3*(data->init), d_res, size, cudaMemcpyDeviceToHost );
 
 	cudaFree( d_image );
 	cudaFree( d_res );
-	
+
 	return 0;
 }
 
@@ -155,6 +153,7 @@ int main( int argc, char *argv[] ) {
 
 	int deviceCount;
 	cudaGetDeviceCount( &deviceCount );
+	deviceCount = 2;
 	if( deviceCount < 2 ) {
 		printf( "We need at least two compute 1.0 or greater "
 			"devices, but only found %d\n", deviceCount );
@@ -181,16 +180,23 @@ int main( int argc, char *argv[] ) {
 	data[0].deviceID = 0;
 	data[0].init = 0;
 	data[0].height = h_height;
-	data[0].width = h_width;
+	data[0].width = h_width/2;
 	data[0].image = h_image;
 	data[0].out = h_res;
+
+	data[1].deviceID = 1;
+	data[1].init = data[0].width*data[0].height;
+	data[1].height = h_height;
+	data[1].width = h_width/2 + h_width%2;
+	data[1].image = h_image;
+	data[1].out = h_res;
 
 	//CUTThread   thread = start_thread( routine, &(data[0]) );
 	//routine( &(data[1]) );
 	//end_thread( thread );
 
 	routine( &(data[0]) );
-
+	routine( &(data[1]) );
 
 	savePPM( (char *)"out.ppm", h_res, h_width, h_height );
 
